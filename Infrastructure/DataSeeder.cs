@@ -1,31 +1,35 @@
 ﻿using Application.ServiceInterfaces;
 using Core.Enums;
+using Core.Identity;
 using Core.Models;
 using Infrastructure.Data.Contexts;
+using Infrastructure.Data.Identity;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
 
-namespace Application.ServiceImplementation
+namespace Infrastructure.Data
 {
     public class DataSeeder : IDataSeeder
     {
         private readonly ApplicationDbContext _context;
+        private readonly IdentityDbContext _identityContext;
         private readonly ILogger<DataSeeder> _logger;
-        private readonly RoleManager<IdentityRole> _roleManager;  
+        private readonly RoleManager<IdentityRole> _roleManager;
+        private readonly UserManager<ApplicationUser> _userManager;
 
         public DataSeeder(
             ApplicationDbContext context,
+            IdentityDbContext identityContext,
             ILogger<DataSeeder> logger,
-            RoleManager<IdentityRole> roleManager)
+            RoleManager<IdentityRole> roleManager,
+            UserManager<ApplicationUser> userManager)
         {
             _context = context;
+            _identityContext = identityContext;
             _logger = logger;
-            _roleManager = roleManager;  
+            _roleManager = roleManager;
+            _userManager = userManager;
         }
 
         public async Task SeedAllAsync()
@@ -33,7 +37,6 @@ namespace Application.ServiceImplementation
             try
             {
                 _logger.LogInformation("Starting database seeding...");
-
 
                 await SeedRolesAsync();
 
@@ -45,6 +48,7 @@ namespace Application.ServiceImplementation
                 }
 
                 await SeedCoachesAsync();
+                await SeedUsersAsync();
                 await SeedTeamsAsync();
                 await SeedSwimmersAsync();
                 await SeedPerformanceRecordsAsync();
@@ -58,11 +62,19 @@ namespace Application.ServiceImplementation
                 throw;
             }
         }
+
         public async Task SeedRolesAsync()
         {
             _logger.LogInformation("Seeding roles...");
 
-            var roles = new[] { "SuperAdmin", "Admin", "Coach", "Swimmer" };
+            var roles = new[]
+            {
+                UserRoles.Admin,
+                UserRoles.SeniorCoach,
+                UserRoles.HeadCoach,
+                UserRoles.RegularCoach,
+                UserRoles.Swimmer
+            };
 
             foreach (var role in roles)
             {
@@ -75,6 +87,7 @@ namespace Application.ServiceImplementation
 
             _logger.LogInformation("Role seeding completed");
         }
+
         public async Task SeedCoachesAsync()
         {
             var coaches = new List<Coach>
@@ -83,7 +96,7 @@ namespace Application.ServiceImplementation
                 {
                     FirstName = "Mahmoud",
                     LastName = "Khalaf",
-                    Email = "MahmoudKhalafWork.com",
+                    Email = "mahmoud.khalaf@swimacademy.com",
                     PhoneNumber = "+2012345678",
                     HireDate = DateTime.UtcNow.AddYears(-5),
                     IsActive = true,
@@ -93,7 +106,7 @@ namespace Application.ServiceImplementation
                 {
                     FirstName = "Mohanad",
                     LastName = "Nassar",
-                    Email = "MohanadNassarWork.com",
+                    Email = "mohanad.nassar@swimacademy.com",
                     PhoneNumber = "+1-555-0102",
                     HireDate = DateTime.UtcNow.AddYears(-3),
                     IsActive = true,
@@ -103,17 +116,68 @@ namespace Application.ServiceImplementation
                 {
                     FirstName = "Abd-Elfatah",
                     LastName = "Ahmed",
-                    Email = "miAbd-ElfatahWork.com",
+                    Email = "abd.elfatah@swimacademy.com",
                     PhoneNumber = "+1-555-0103",
                     HireDate = DateTime.UtcNow.AddYears(-1),
                     IsActive = true,
                     CreatedAt = DateTime.UtcNow.AddYears(-1)
+                },
+                new Coach
+                {
+                    FirstName = "Super",
+                    LastName = "Admin",
+                    Email = "admin@swimacademy.com",
+                    PhoneNumber = "+1-555-9999",
+                    HireDate = DateTime.UtcNow.AddYears(-10),
+                    IsActive = true,
+                    CreatedAt = DateTime.UtcNow.AddYears(-10)
                 }
             };
 
             await _context.Set<Coach>().AddRangeAsync(coaches);
             await _context.SaveChangesAsync();
             _logger.LogInformation("Seeded {Count} coaches", coaches.Count);
+        }
+
+        public async Task SeedUsersAsync()
+        {
+            _logger.LogInformation("Seeding Identity users for coaches...");
+
+            var coaches = await _context.Set<Coach>().OrderBy(c => c.Id).ToListAsync();
+
+            var coachUsers = new[]
+            {
+                new { Coach = coaches[0], Role = UserRoles.RegularCoach, Password = "Coach@123" },
+                new { Coach = coaches[1], Role = UserRoles.SeniorCoach, Password = "Coach@123" },
+                new { Coach = coaches[2], Role = UserRoles.HeadCoach, Password = "Coach@123" },
+                new { Coach = coaches[3], Role = UserRoles.Admin, Password = "Admin@123" }
+            };
+
+            foreach (var item in coachUsers)
+            {
+                if (await _userManager.FindByEmailAsync(item.Coach.Email) == null)
+                {
+                    var user = new ApplicationUser
+                    {
+                        UserName = item.Coach.Email,
+                        Email = item.Coach.Email,
+                        FirstName = item.Coach.FirstName,
+                        LastName = item.Coach.LastName,
+                        CoachId = item.Coach.Id,
+                        EmailConfirmed = true,
+                        IsActive = true
+                    };
+
+                    var result = await _userManager.CreateAsync(user, item.Password);
+                    if (result.Succeeded)
+                    {
+                        await _userManager.AddToRoleAsync(user, item.Role);
+                        _logger.LogInformation($"Created user for coach {item.Coach.FullName} with role {item.Role}");
+                    }
+                }
+            }
+
+            _logger.LogInformation("Identity users seeding completed");
         }
 
         public async Task SeedTeamsAsync()
@@ -126,7 +190,7 @@ namespace Application.ServiceImplementation
                 new Team
                 {
                     Name = "Dolphin",
-                    Description = "intermediate competitive swimming team for intermediate swimmers",
+                    Description = "Intermediate competitive swimming team for intermediate swimmers",
                     CoachId = coaches[0].Id,
                     IsActive = true,
                     CreatedAt = DateTime.UtcNow.AddMonths(-6)
@@ -161,7 +225,6 @@ namespace Application.ServiceImplementation
 
             var swimmers = new List<Swimmer>
             {
-                // Dolphins Elite Team
                 new Swimmer
                 {
                     FirstName = "Emma",
@@ -188,13 +251,11 @@ namespace Application.ServiceImplementation
                     TeamId = teams[0].Id,
                     CreatedAt = DateTime.UtcNow.AddYears(-3)
                 },
-                
-                // Sharks Academy Team
                 new Swimmer
                 {
                     FirstName = "Saif",
                     LastName = "Ahmed",
-                    Email = "SaifAhmed.m@example.com",
+                    Email = "saif.ahmed@example.com",
                     DateOfBirth = new DateTime(2009, 2, 14),
                     PhoneNumber = "+1-555-1003",
                     JoinDate = DateTime.UtcNow.AddYears(-3),
@@ -216,8 +277,6 @@ namespace Application.ServiceImplementation
                     TeamId = teams[1].Id,
                     CreatedAt = DateTime.UtcNow.AddMonths(-8)
                 },
-                
-                // Seahorses Junior Team
                 new Swimmer
                 {
                     FirstName = "Isabella",
@@ -262,7 +321,6 @@ namespace Application.ServiceImplementation
 
             foreach (var swimmer in swimmers)
             {
-                // Add 3-5 performance records per swimmer
                 int recordCount = random.Next(3, 6);
 
                 for (int i = 0; i < recordCount; i++)
@@ -270,7 +328,6 @@ namespace Application.ServiceImplementation
                     var distance = (EventDistance)Enum.GetValues(typeof(EventDistance))
                         .GetValue(random.Next(Enum.GetValues(typeof(EventDistance)).Length))!;
 
-                    // Generate realistic times based on distance
                     decimal baseTime = distance switch
                     {
                         EventDistance.Fifty => random.Next(25, 35),
@@ -292,6 +349,7 @@ namespace Application.ServiceImplementation
                     });
                 }
             }
+
             await _context.Set<PerformanceRecord>().AddRangeAsync(records);
             await _context.SaveChangesAsync();
             _logger.LogInformation("Seeded {Count} performance records", records.Count);
@@ -322,7 +380,6 @@ namespace Application.ServiceImplementation
 
             foreach (var swimmer in swimmers)
             {
-                // Add 2-4 notes per swimmer
                 int noteCount = random.Next(2, 5);
 
                 for (int i = 0; i < noteCount; i++)

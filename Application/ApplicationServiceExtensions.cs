@@ -1,6 +1,7 @@
 ﻿using Application.Interfaces;
 using Application.ServiceImplementation;
 using Application.ServiceInterfaces;
+using Application.Services;
 using Microsoft.Extensions.DependencyInjection;
 using System;
 using System.Collections.Generic;
@@ -20,14 +21,12 @@ namespace Application
 
             // Service Manager (Facade Pattern)
             Services.AddScoped<IAuthService, AuthService>();
-            Services.AddScoped<IServiceManger, ServiceManger>();
+            Services.AddScoped<IServiceManger, ServiceManager>();
             Services.AddScoped<ICoachService, CoachService>();
             Services.AddScoped<ISwimmerService, SwimmerService>();
             Services.AddScoped<ITeamService, TeamService>();
             Services.AddScoped<IPerformanceRecordService, PerformanceRecordService>();
             Services.AddScoped<IPerformanceNoteService, PerformanceNoteService>();
-            Services.AddScoped<ITokenService, TokenService>();
-            Services.AddScoped<IDataSeeder, DataSeeder>();
             return Services;
         }
     }
