@@ -25,12 +25,12 @@ namespace Application.ServiceImplementation
 
         public async Task<bool> CoachExistsAsync(int id)
         {
-            var result =  await _unitOfWork.Coaches.ExistsAsync(id);
-            if(result == false)
+            var result =  await _unitOfWork.Coaches.GetByIdAsync(id);
+            if(result is null )
             {
                 throw new CoachNotFoundException(id);
             }
-            return result;
+            return true;
         }
 
         public async Task<CoachDto> CreateCoachAsync(CreateCoachDto createCoachDto)
