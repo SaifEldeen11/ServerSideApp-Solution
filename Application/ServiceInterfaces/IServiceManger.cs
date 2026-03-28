@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 
 namespace Application.ServiceInterfaces
 {
+
     public interface IServiceManger
     {
         ICoachService CoachService { get; }
