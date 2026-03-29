@@ -1,19 +1,15 @@
-﻿using Core;
-using Core.Interfaces;
+﻿using Core.Interfaces;
 using Core.InterFaces;
 using Core.Models;
 using Infrastructure.Data.Contexts;
-using Microsoft.EntityFrameworkCore;
+using Infrastructure.Repository;
 using Microsoft.EntityFrameworkCore.Storage;
-using System;
-using System.Collections.Generic;
-using System.Threading.Tasks;
 
 namespace Infrastructure.Repository
 {
     public class UnitOfWork : IUnitOfWork
     {
-        private readonly Dictionary<string, object> _repositories = new Dictionary<string, object>();
+        private readonly Dictionary<string, object> _repositories = new();
         private readonly ApplicationDbContext _context;
         private IDbContextTransaction? _transaction;
 
@@ -22,14 +18,14 @@ namespace Infrastructure.Repository
             _context = context;
         }
 
-        public IGenericRepository<Coach> Coaches =>
-            GetRepository<GenericRepository<Coach>, Coach>();
+        public ICoachRepository Coaches =>
+            GetRepository<CoachRepository, Coach>();
 
         public ISwimmerRepository Swimmers =>
             GetRepository<SwimmerRepository, Swimmer>();
 
-        public IGenericRepository<Team> Teams =>
-            GetRepository<GenericRepository<Team>, Team>();
+        public ITeamRepository Teams =>
+            GetRepository<TeamRepository, Team>();
 
         public IPerformanceRecordRepository PerformanceRecords =>
             GetRepository<PerformanceRecordRepository, PerformanceRecord>();
@@ -40,11 +36,8 @@ namespace Infrastructure.Repository
         private T GetRepository<T, TEntity>(T? repo = null) where T : class where TEntity : class
         {
             var typeName = typeof(TEntity).Name;
-
             if (_repositories.ContainsKey(typeName))
-            {
                 return (T)_repositories[typeName];
-            }
 
             var repository = repo ?? Activator.CreateInstance(typeof(T), _context) as T;
             _repositories.Add(typeName, repository!);
@@ -62,9 +55,7 @@ namespace Infrastructure.Repository
             {
                 await _context.SaveChangesAsync();
                 if (_transaction != null)
-                {
                     await _transaction.CommitAsync();
-                }
             }
             catch
             {
@@ -81,12 +72,6 @@ namespace Infrastructure.Repository
             }
         }
 
-        public void Dispose()
-        {
-            _transaction?.Dispose();
-            _context.Dispose();
-        }
-
         public async Task RollbackTransactionAsync()
         {
             if (_transaction != null)
@@ -100,6 +85,12 @@ namespace Infrastructure.Repository
         public async Task<int> SaveChangesAsync()
         {
             return await _context.SaveChangesAsync();
+        }
+
+        public void Dispose()
+        {
+            _transaction?.Dispose();
+            _context.Dispose();
         }
     }
 }

@@ -3,6 +3,7 @@ using Application.ServiceInterfaces;
 using Core.Identity;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using System.Security.Claims;
 
 namespace ServerSideApp.Controllers;
@@ -10,6 +11,7 @@ namespace ServerSideApp.Controllers;
 [Route("api/[controller]")]
 [ApiController]
 [Authorize]
+[EnableRateLimiting("general")]
 public class CoachesController(IServiceManger _serviceManager) : ControllerBase
 {
     // GET api/coaches

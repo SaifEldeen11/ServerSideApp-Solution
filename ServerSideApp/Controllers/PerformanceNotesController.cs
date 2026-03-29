@@ -3,6 +3,7 @@ using Application.ServiceInterfaces;
 using Application.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using System.Security.Claims;
 
 namespace ServerSideApp.Controllers
@@ -10,6 +11,7 @@ namespace ServerSideApp.Controllers
     [Route("api/[controller]")]
     [ApiController]
     [Authorize]
+    [EnableRateLimiting("general")]
     public class PerformanceNotesController(IServiceManger _serviceManger) : Controller
     {
         [HttpGet]

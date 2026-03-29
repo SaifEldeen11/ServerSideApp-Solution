@@ -4,6 +4,7 @@ using Application.Services;
 using Core.Enums;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using System.Security.Claims;
 
 namespace ServerSideApp.Controllers
@@ -11,6 +12,7 @@ namespace ServerSideApp.Controllers
     [Route("api/[controller]")]
     [ApiController]
     [Authorize]
+    [EnableRateLimiting("general")]
     public class PerformanceRecordsController(IServiceManger _serviceManger) : Controller
     {
 

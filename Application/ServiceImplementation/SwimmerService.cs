@@ -1,6 +1,7 @@
 ﻿using Application.Dtos.Swimmer_Dto;
 using Application.Exceptions;
 using Application.Interfaces;
+using Application.Pagination;
 using AutoMapper;
 using Core.Enums;
 using Core.Interfaces;
@@ -23,6 +24,7 @@ namespace Application.ServiceImplementation
             _unitOfWork = unitOfWork;
             _mapper = mapper;
         }
+        #region Create
         public async Task<SwimmerDto> CreateSwimmerAsync(CreateSwimmerDto createSwimmerDto)
         {
             var swimmer = _mapper.Map<Swimmer>(createSwimmerDto);
@@ -34,38 +36,56 @@ namespace Application.ServiceImplementation
 
             return _mapper.Map<SwimmerDto>(swimmer);
 
-        }
+        } 
+        #endregion
 
+        #region Delete
         public async Task<bool> DeleteSwimmerAsync(int id)
         {
             var swimmer = await _unitOfWork.Swimmers.GetByIdAsync(id);
-            if(swimmer is null)
+            if (swimmer is null)
             {
                 throw new SwimmerNotFoundException(id);
             }
             swimmer.IsActive = false; // soft delete
             await _unitOfWork.SaveChangesAsync();
             return true;
-        }
+        } 
+        #endregion
 
-        public async Task<IEnumerable<SwimmerDto>> GetAllSwimmersAsyn()
+        #region Get All
+        public async Task<PaginatedResult<SwimmerDto>> GetAllSwimmersAsync(PaginationParams pagination)
         {
             var swimmers = await _unitOfWork.Swimmers.GetAllAsync();
-            swimmers = swimmers.Where(s => s.IsActive); // Active swimmers only
-            return _mapper.Map<IEnumerable<SwimmerDto>>(swimmers);
-        }
+            swimmers = swimmers.Where(s => s.IsActive);
 
+            var totalCount = swimmers.Count();
+            var data = swimmers
+                .Skip((pagination.PageIndex - 1) * pagination.PageSize)
+                .Take(pagination.PageSize);
+
+            return new PaginatedResult<SwimmerDto>(
+                pagination.PageIndex,
+                pagination.PageSize,
+                totalCount,
+                _mapper.Map<IEnumerable<SwimmerDto>>(data));
+        }
+        #endregion
+
+        #region Get By Id
         public async Task<SwimmerDto?> GetSwimmerByIdAsync(int id)
         {
-            var swimmer =  await _unitOfWork.Swimmers.GetByIdAsync(id);
-            if(swimmer is null || !swimmer.IsActive)
+            var swimmer = await _unitOfWork.Swimmers.GetByIdAsync(id);
+            if (swimmer is null || !swimmer.IsActive)
             {
                 throw new SwimmerNotFoundException(id);
             }
             return _mapper.Map<SwimmerDto>(swimmer);
 
         }
+        #endregion
 
+        #region Dashboard
         public async Task<SwimmerDashboardDto?> GetSwimmerDashboardAsync(int swimmerId)
         {
             var swimmer = await _unitOfWork.Swimmers.GetSwimmerWithPerformanceRecordsAsync(swimmerId);
@@ -150,26 +170,47 @@ namespace Application.ServiceImplementation
                 Statistics = statistics
             };
         }
+        #endregion
 
-        public async Task<IEnumerable<SwimmerDto>> GetSwimmersByReadinessAsync(CompetitionReadiness readiness)
+        public async Task<PaginatedResult<SwimmerDto>> GetSwimmersByReadinessAsync(CompetitionReadiness readiness, PaginationParams paginationParams)
         {
             var swimmers = await _unitOfWork.Swimmers.GetSwimmersByReadinessAsync(readiness);
-            swimmers = swimmers.Where(s => s.IsActive); // Active swimmers only
-            return _mapper.Map<IEnumerable<SwimmerDto>>(swimmers);
+            swimmers = swimmers.Where(s => s.IsActive);
+
+            var totalCount = swimmers.Count();
+            var data = swimmers
+                .Skip((paginationParams.PageIndex - 1) * paginationParams.PageSize)
+                .Take(paginationParams.PageSize);
+
+            return new PaginatedResult<SwimmerDto>(
+                paginationParams.PageIndex,
+                paginationParams.PageSize,
+                totalCount,
+                _mapper.Map<IEnumerable<SwimmerDto>>(data));
         }
 
-        public async Task<IEnumerable<SwimmerDto>> GetSwimmersByTeamIdAsync(int teamId)
+        public async Task<PaginatedResult<SwimmerDto>> GetSwimmersByTeamIdAsync(int teamId, PaginationParams paginationParams)
         {
             var team = await _unitOfWork.Teams.GetByIdAsync(teamId);
             if (team == null || !team.IsActive)
-            {
                 throw new TeamNotFoundException(teamId);
-            }
+
             var swimmers = await _unitOfWork.Swimmers.GetSwimmersByTeamAsync(teamId);
-            swimmers = swimmers.Where(s => s.IsActive); // Active swimmers only
-            return _mapper.Map<IEnumerable<SwimmerDto>>(swimmers);
+            swimmers = swimmers.Where(s => s.IsActive);
+
+            var totalCount = swimmers.Count();
+            var data = swimmers
+                .Skip((paginationParams.PageIndex - 1) * paginationParams.PageSize)
+                .Take(paginationParams.PageSize);
+
+            return new PaginatedResult<SwimmerDto>(
+                paginationParams.PageIndex,
+                paginationParams.PageSize,
+                totalCount,
+                _mapper.Map<IEnumerable<SwimmerDto>>(data));
         }
 
+        #region Update
         public async Task<SwimmerDto> UpdateSwimmerAsync(UpdateSwimmerDto updateSwimmerDto)
         {
             var existingSwimmer = await _unitOfWork.Swimmers.GetByIdAsync(updateSwimmerDto.Id);
@@ -181,6 +222,7 @@ namespace Application.ServiceImplementation
             await _unitOfWork.SaveChangesAsync();
 
             return _mapper.Map<SwimmerDto>(existingSwimmer);
-        }
+        } 
+        #endregion
     }
 }

@@ -1,8 +1,10 @@
 using Application;
 using Application.ServiceInterfaces;
 using Infrastructure;
+using Microsoft.AspNetCore.RateLimiting;
 using ServerSideApp.CustomMiddleWare;
 using ServerSideApp.Extensions;
+using System.Threading.RateLimiting;
 
 namespace ServerSideApp
 {
@@ -21,6 +23,39 @@ namespace ServerSideApp
             builder.Services.AddWebApplicationServices();
             builder.Services.AddSwaggerServices();
 
+
+            builder.Services.AddRateLimiter(ratelimiterOptions =>
+            {
+                ratelimiterOptions.OnRejected = async (context,cancellationToken) =>
+                {  
+                    context.HttpContext.Response.StatusCode = 429;
+                    context.HttpContext.Response.ContentType = "application/json";
+                    await context.HttpContext.Response.WriteAsJsonAsync(new
+                    {
+                        statusCode = 429,
+                        message = "Too many requests. Please try again later."
+                    }, cancellationToken);
+                };
+
+
+                ratelimiterOptions.AddFixedWindowLimiter("general", opt =>
+                {
+                    opt.Window = TimeSpan.FromMinutes(1);
+                    opt.PermitLimit = 30;
+                    opt.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
+                    opt.QueueLimit = 0;
+                });
+
+                ratelimiterOptions.AddFixedWindowLimiter("auth", opt =>
+                {
+                    opt.Window = TimeSpan.FromMinutes(1);
+                    opt.PermitLimit = 10;
+                    opt.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
+                    opt.QueueLimit = 0;
+                });
+                ratelimiterOptions.RejectionStatusCode = 429;
+            });
+
             var app = builder.Build();
 
             // Seed data
@@ -38,6 +73,7 @@ namespace ServerSideApp
 
             app.UseGlobalExceptionHandler();
             app.UseHttpsRedirection();
+            app.UseRateLimiter();
             app.UseAuthentication();
             app.UseAuthorization();
             app.MapControllers();

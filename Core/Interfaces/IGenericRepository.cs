@@ -11,7 +11,6 @@ namespace Core.InterFaces
     {
         Task<TEntity?> GetByIdAsync(int id);
         Task<IEnumerable<TEntity>> GetAllAsync();
-
         Task<IEnumerable<TEntity>> FindAsync(Expression<Func<TEntity, bool>> predicate);
 
         Task<TEntity> AddAsync(TEntity entity);
