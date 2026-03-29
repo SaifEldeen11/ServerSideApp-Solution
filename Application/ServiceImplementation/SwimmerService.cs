@@ -2,15 +2,12 @@
 using Application.Exceptions;
 using Application.Interfaces;
 using Application.Pagination;
+using Application.ServiceInterfaces;
 using AutoMapper;
 using Core.Enums;
 using Core.Interfaces;
 using Core.Models;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+using System.Text.Json;
 
 namespace Application.ServiceImplementation
 {
@@ -18,12 +15,15 @@ namespace Application.ServiceImplementation
     {
         private readonly IUnitOfWork _unitOfWork;
         private readonly IMapper _mapper;
+        private readonly ICacheService _cacheService;
 
-        public SwimmerService(IUnitOfWork unitOfWork, IMapper mapper)
+        public SwimmerService(IUnitOfWork unitOfWork, IMapper mapper, ICacheService cacheService)
         {
             _unitOfWork = unitOfWork;
             _mapper = mapper;
+            _cacheService = cacheService;
         }
+
         #region Create
         public async Task<SwimmerDto> CreateSwimmerAsync(CreateSwimmerDto createSwimmerDto)
         {
@@ -34,9 +34,10 @@ namespace Application.ServiceImplementation
             await _unitOfWork.Swimmers.AddAsync(swimmer);
             await _unitOfWork.SaveChangesAsync();
 
-            return _mapper.Map<SwimmerDto>(swimmer);
+            await InvalidateListCachesAsync();
 
-        } 
+            return _mapper.Map<SwimmerDto>(swimmer);
+        }
         #endregion
 
         #region Delete
@@ -44,18 +45,26 @@ namespace Application.ServiceImplementation
         {
             var swimmer = await _unitOfWork.Swimmers.GetByIdAsync(id);
             if (swimmer is null)
-            {
                 throw new SwimmerNotFoundException(id);
-            }
-            swimmer.IsActive = false; // soft delete
+
+            swimmer.IsActive = false;
             await _unitOfWork.SaveChangesAsync();
+
+            await InvalidateSingleCacheAsync(id);
+            await InvalidateListCachesAsync();
+
             return true;
-        } 
+        }
         #endregion
 
         #region Get All
         public async Task<PaginatedResult<SwimmerDto>> GetAllSwimmersAsync(PaginationParams pagination)
         {
+            var cacheKey = $"swimmers:all:page:{pagination.PageIndex}";
+            var cached = await _cacheService.GetAsync(cacheKey);
+            if (cached != null)
+                return JsonSerializer.Deserialize<PaginatedResult<SwimmerDto>>(cached)!;
+
             var swimmers = await _unitOfWork.Swimmers.GetAllAsync();
             swimmers = swimmers.Where(s => s.IsActive);
 
@@ -64,30 +73,43 @@ namespace Application.ServiceImplementation
                 .Skip((pagination.PageIndex - 1) * pagination.PageSize)
                 .Take(pagination.PageSize);
 
-            return new PaginatedResult<SwimmerDto>(
+            var result = new PaginatedResult<SwimmerDto>(
                 pagination.PageIndex,
                 pagination.PageSize,
                 totalCount,
                 _mapper.Map<IEnumerable<SwimmerDto>>(data));
+
+            await _cacheService.SetAsync(cacheKey, result, TimeSpan.FromMinutes(5));
+            return result;
         }
         #endregion
 
         #region Get By Id
         public async Task<SwimmerDto?> GetSwimmerByIdAsync(int id)
         {
+            var cacheKey = $"swimmers:{id}";
+            var cached = await _cacheService.GetAsync(cacheKey);
+            if (cached != null)
+                return JsonSerializer.Deserialize<SwimmerDto>(cached)!;
+
             var swimmer = await _unitOfWork.Swimmers.GetByIdAsync(id);
             if (swimmer is null || !swimmer.IsActive)
-            {
                 throw new SwimmerNotFoundException(id);
-            }
-            return _mapper.Map<SwimmerDto>(swimmer);
 
+            var result = _mapper.Map<SwimmerDto>(swimmer);
+            await _cacheService.SetAsync(cacheKey, result, TimeSpan.FromMinutes(5));
+            return result;
         }
         #endregion
 
         #region Dashboard
         public async Task<SwimmerDashboardDto?> GetSwimmerDashboardAsync(int swimmerId)
         {
+            var cacheKey = $"swimmers:dashboard:{swimmerId}";
+            var cached = await _cacheService.GetAsync(cacheKey);
+            if (cached != null)
+                return JsonSerializer.Deserialize<SwimmerDashboardDto>(cached)!;
+
             var swimmer = await _unitOfWork.Swimmers.GetSwimmerWithPerformanceRecordsAsync(swimmerId);
             if (swimmer == null || !swimmer.IsActive)
                 return null;
@@ -96,7 +118,6 @@ namespace Application.ServiceImplementation
             var allRecords = swimmer.PerformanceRecords.OrderByDescending(r => r.RecordedDate).ToList();
             var recentRecords = _mapper.Map<List<RecentPerformanceDto>>(allRecords.Take(10));
 
-            // Get notes
             var swimmerWithNotes = await _unitOfWork.Swimmers.GetSwimmerWithNotesAsync(swimmerId);
             var recentNotes = swimmerWithNotes?.PerformanceNotes
                 .OrderByDescending(n => n.NoteDate)
@@ -110,21 +131,18 @@ namespace Application.ServiceImplementation
                 })
                 .ToList() ?? new List<PerformanceNoteDto>();
 
-            // Calculate performance by distance
             var performanceByDistance = new List<DistancePerformanceDto>();
             var distances = new[] { EventDistance.Fifty, EventDistance.Hundred, EventDistance.TwoHundred, EventDistance.FourHundred };
 
             foreach (var distance in distances)
             {
                 var distanceRecords = allRecords.Where(r => r.Distance == distance).ToList();
-                if (!distanceRecords.Any())
-                    continue;
+                if (!distanceRecords.Any()) continue;
 
                 var bestRecord = distanceRecords.OrderBy(r => r.TimeInSeconds).First();
                 var latestRecord = distanceRecords.OrderByDescending(r => r.RecordedDate).First();
                 var avgTime = distanceRecords.Average(r => r.TimeInSeconds);
 
-                // Calculate improvement
                 decimal? improvementPercentage = null;
                 if (distanceRecords.Count > 1)
                 {
@@ -146,7 +164,6 @@ namespace Application.ServiceImplementation
                 });
             }
 
-            // Calculate statistics
             var mostImprovedDistance = performanceByDistance
                 .Where(p => p.ImprovementPercentage.HasValue)
                 .OrderByDescending(p => p.ImprovementPercentage)
@@ -161,7 +178,7 @@ namespace Application.ServiceImplementation
                 MostImprovedPercentage = mostImprovedDistance?.ImprovementPercentage
             };
 
-            return new SwimmerDashboardDto
+            var result = new SwimmerDashboardDto
             {
                 Swimmer = swimmerDto,
                 PerformanceByDistance = performanceByDistance,
@@ -169,11 +186,20 @@ namespace Application.ServiceImplementation
                 RecentNotes = recentNotes,
                 Statistics = statistics
             };
+
+            await _cacheService.SetAsync(cacheKey, result, TimeSpan.FromMinutes(5));
+            return result;
         }
         #endregion
 
+        #region Get By Readiness
         public async Task<PaginatedResult<SwimmerDto>> GetSwimmersByReadinessAsync(CompetitionReadiness readiness, PaginationParams paginationParams)
         {
+            var cacheKey = $"swimmers:readiness:{readiness}:page:{paginationParams.PageIndex}";
+            var cached = await _cacheService.GetAsync(cacheKey);
+            if (cached != null)
+                return JsonSerializer.Deserialize<PaginatedResult<SwimmerDto>>(cached)!;
+
             var swimmers = await _unitOfWork.Swimmers.GetSwimmersByReadinessAsync(readiness);
             swimmers = swimmers.Where(s => s.IsActive);
 
@@ -182,15 +208,25 @@ namespace Application.ServiceImplementation
                 .Skip((paginationParams.PageIndex - 1) * paginationParams.PageSize)
                 .Take(paginationParams.PageSize);
 
-            return new PaginatedResult<SwimmerDto>(
+            var result = new PaginatedResult<SwimmerDto>(
                 paginationParams.PageIndex,
                 paginationParams.PageSize,
                 totalCount,
                 _mapper.Map<IEnumerable<SwimmerDto>>(data));
-        }
 
+            await _cacheService.SetAsync(cacheKey, result, TimeSpan.FromMinutes(5));
+            return result;
+        }
+        #endregion
+
+        #region Get By Team
         public async Task<PaginatedResult<SwimmerDto>> GetSwimmersByTeamIdAsync(int teamId, PaginationParams paginationParams)
         {
+            var cacheKey = $"swimmers:team:{teamId}:page:{paginationParams.PageIndex}";
+            var cached = await _cacheService.GetAsync(cacheKey);
+            if (cached != null)
+                return JsonSerializer.Deserialize<PaginatedResult<SwimmerDto>>(cached)!;
+
             var team = await _unitOfWork.Teams.GetByIdAsync(teamId);
             if (team == null || !team.IsActive)
                 throw new TeamNotFoundException(teamId);
@@ -203,26 +239,47 @@ namespace Application.ServiceImplementation
                 .Skip((paginationParams.PageIndex - 1) * paginationParams.PageSize)
                 .Take(paginationParams.PageSize);
 
-            return new PaginatedResult<SwimmerDto>(
+            var result = new PaginatedResult<SwimmerDto>(
                 paginationParams.PageIndex,
                 paginationParams.PageSize,
                 totalCount,
                 _mapper.Map<IEnumerable<SwimmerDto>>(data));
+
+            await _cacheService.SetAsync(cacheKey, result, TimeSpan.FromMinutes(5));
+            return result;
         }
+        #endregion
 
         #region Update
         public async Task<SwimmerDto> UpdateSwimmerAsync(UpdateSwimmerDto updateSwimmerDto)
         {
             var existingSwimmer = await _unitOfWork.Swimmers.GetByIdAsync(updateSwimmerDto.Id);
             if (existingSwimmer == null || !existingSwimmer.IsActive)
-                throw new SwimmerNotFoundException(existingSwimmer!.Id);
+                throw new SwimmerNotFoundException(updateSwimmerDto.Id);
 
             _mapper.Map(updateSwimmerDto, existingSwimmer);
             await _unitOfWork.Swimmers.UpdateAsync(existingSwimmer);
             await _unitOfWork.SaveChangesAsync();
 
+            await InvalidateSingleCacheAsync(updateSwimmerDto.Id);
+            await InvalidateListCachesAsync();
+
             return _mapper.Map<SwimmerDto>(existingSwimmer);
-        } 
+        }
+        #endregion
+
+        #region Cache Invalidation
+        private async Task InvalidateSingleCacheAsync(int id)
+        {
+            await _cacheService.DeleteAsync($"swimmers:{id}");
+        }
+
+        private async Task InvalidateListCachesAsync()
+        {
+            await _cacheService.DeleteByPatternAsync("swimmers:all:*");
+            await _cacheService.DeleteByPatternAsync("swimmers:readiness:*");
+            await _cacheService.DeleteByPatternAsync("swimmers:team:*");
+        }
         #endregion
     }
 }

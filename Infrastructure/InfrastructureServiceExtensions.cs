@@ -10,6 +10,7 @@ using Infrastructure.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using StackExchange.Redis;
 
 namespace Infrastructure
 {
@@ -45,6 +46,12 @@ namespace Infrastructure
             services.AddScoped<IUnitOfWork, UnitOfWork>();
             services.AddScoped<ITokenService, TokenService>();
             services.AddScoped<IDataSeeder, DataSeeder>();
+
+            services.AddSingleton<IConnectionMultiplexer>(
+            ConnectionMultiplexer.Connect(configuration["Redis:ConnectionString"]!));
+
+            services.AddScoped<ICacheRepository, CacheRepository>();
+            services.AddScoped<ICacheService, CacheService>();
 
             return services;
         }

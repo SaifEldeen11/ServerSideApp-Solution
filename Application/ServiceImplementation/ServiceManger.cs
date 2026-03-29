@@ -23,17 +23,17 @@ namespace Application.Services
             SignInManager<ApplicationUser> signInManager,
             UserManager<ApplicationUser> userManager,
             RoleManager<IdentityRole> roleManager,
-            ITokenService tokenService)
+            ITokenService tokenService,
+            ICacheService cacheService)
         {
-            // Initialize Lazy instances with captured constructor parameters
             _coachService = new Lazy<ICoachService>(() =>
-                new CoachService(unitOfWork, mapper));
+                new CoachService(unitOfWork, mapper, cacheService));
 
             _swimmerService = new Lazy<ISwimmerService>(() =>
-                new SwimmerService(unitOfWork, mapper));
+                new SwimmerService(unitOfWork, mapper, cacheService));
 
             _teamService = new Lazy<ITeamService>(() =>
-                new TeamService(unitOfWork, mapper));
+                new TeamService(unitOfWork, mapper, cacheService));
 
             _performanceRecordService = new Lazy<IPerformanceRecordService>(() =>
                 new PerformanceRecordService(unitOfWork, mapper));
