@@ -1,4 +1,5 @@
 ﻿using Application.Dtos.Swimmer_Dto;
+using Application.Pagination;
 using Core.Enums;
 using System;
 using System.Collections.Generic;
@@ -10,12 +11,11 @@ namespace Application.Interfaces
 {
     public interface ISwimmerService
     {
-        Task<IEnumerable<SwimmerDto>> GetAllSwimmersAsyn();
+        Task<PaginatedResult<SwimmerDto>> GetAllSwimmersAsync(PaginationParams pagination);
         Task<SwimmerDto?> GetSwimmerByIdAsync(int id);
 
-        Task<IEnumerable<SwimmerDto>> GetSwimmersByTeamIdAsync(int teamId);
-
-        Task<IEnumerable<SwimmerDto>> GetSwimmersByReadinessAsync(CompetitionReadiness readiness);
+        Task<PaginatedResult<SwimmerDto>> GetSwimmersByTeamIdAsync(int teamId, PaginationParams pagination);
+        Task<PaginatedResult<SwimmerDto>> GetSwimmersByReadinessAsync(CompetitionReadiness readiness, PaginationParams pagination);
         Task<SwimmerDto> CreateSwimmerAsync(CreateSwimmerDto createSwimmerDto);
         Task<SwimmerDto> UpdateSwimmerAsync(UpdateSwimmerDto updateSwimmerDto);
         Task<bool> DeleteSwimmerAsync(int id);

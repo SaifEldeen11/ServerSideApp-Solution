@@ -22,6 +22,13 @@ namespace Infrastructure.Repository
             _context = context;
         }
 
+        public override async Task<Swimmer?> GetByIdAsync(int id)
+        {
+            return await _dbSet
+                .Include(s => s.Team)
+                .FirstOrDefaultAsync(s => s.Id == id);
+        }
+
         public async Task<IEnumerable<Swimmer>> GetSwimmersByReadinessAsync(CompetitionReadiness readiness)
         {
             return await _dbSet

@@ -1,8 +1,10 @@
 ﻿using Application.Dtos.Swimmer_Dto;
+using Application.Pagination;
 using Application.ServiceInterfaces;
 using Core.Enums;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using System.Security.Claims;
 
 namespace ServerSideApp.Controllers
@@ -10,14 +12,15 @@ namespace ServerSideApp.Controllers
     [Route("api/[controller]")]
     [ApiController]
     [Authorize]
+    [EnableRateLimiting("general")]
     public class SwimmersController(IServiceManger _serviceManager) : ControllerBase
     {
         // GET api/swimmers
         [HttpGet]
         [Authorize(Roles = "Admin,SeniorCoach,HeadCoach,RegularCoach")]
-        public async Task<ActionResult<IEnumerable<SwimmerDto>>> GetAllSwimmers()
+        public async Task<IActionResult> GetAllSwimmers([FromQuery] PaginationParams paginationParams)
         {
-            var swimmers = await _serviceManager.SwimmerService.GetAllSwimmersAsyn();
+            var swimmers = await _serviceManager.SwimmerService.GetAllSwimmersAsync(paginationParams);
             return Ok(swimmers);
         }
 
@@ -44,18 +47,18 @@ namespace ServerSideApp.Controllers
         // GET api/swimmers/team/{teamId}
         [HttpGet("team/{teamId:int}")]
         [Authorize(Roles = "Admin,SeniorCoach,HeadCoach,RegularCoach")]
-        public async Task<ActionResult<IEnumerable<SwimmerDto>>> GetSwimmersByTeam(int teamId)
+        public async Task<ActionResult<IEnumerable<SwimmerDto>>> GetSwimmersByTeam(int teamId,[FromQuery]PaginationParams paginationParams)
         {
-            var swimmers = await _serviceManager.SwimmerService.GetSwimmersByTeamIdAsync(teamId);
+            var swimmers = await _serviceManager.SwimmerService.GetSwimmersByTeamIdAsync(teamId, paginationParams);
             return Ok(swimmers);
         }
 
         // GET api/swimmers/readiness/{status}
         [HttpGet("readiness/{status}")]
         [Authorize(Roles = "Admin,SeniorCoach,HeadCoach,RegularCoach")]
-        public async Task<ActionResult<IEnumerable<SwimmerDto>>> GetSwimmersByReadiness(CompetitionReadiness status)
+        public async Task<ActionResult<IEnumerable<SwimmerDto>>> GetSwimmersByReadiness(CompetitionReadiness status,[FromQuery]PaginationParams paginationParams)
         {
-            var swimmers = await _serviceManager.SwimmerService.GetSwimmersByReadinessAsync(status);
+            var swimmers = await _serviceManager.SwimmerService.GetSwimmersByReadinessAsync(status, paginationParams);
             return Ok(swimmers);
         }
 

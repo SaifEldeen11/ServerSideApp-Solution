@@ -10,9 +10,9 @@ namespace Core.Interfaces
 {
     public interface IUnitOfWork : IDisposable
     {
-        IGenericRepository<Coach> Coaches { get; }
+        ICoachRepository Coaches { get; }
         ISwimmerRepository Swimmers { get; }
-        IGenericRepository<Team> Teams { get; }
+        ITeamRepository Teams { get; }
         IPerformanceRecordRepository PerformanceRecords { get; }
         IGenericRepository<PerformanceNote> PerformanceNotes { get; }
 

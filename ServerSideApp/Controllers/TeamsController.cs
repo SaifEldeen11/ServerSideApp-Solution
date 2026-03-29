@@ -4,12 +4,14 @@ using Application.Services;
 using Core.Identity;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace ServerSideApp.Controllers;
 
 [Route("api/[controller]")]
 [ApiController]
 [Authorize]
+[EnableRateLimiting("general")]
 public class TeamsController(IServiceManger _serviceManager) : ControllerBase
 {
     // GET api/teams
